@@ -3,23 +3,49 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const db = require('../db');
 const authMiddleware = require('../middleware/auth');
+const { ensureDefaultWorkspaceForUser } = require('../services/workspaces');
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_key';
 const SALT_ROUNDS = 10;
 
+const ROLE_PRIORITY = {
+  'Decision Maker': 3,
+  Reviewer: 2,
+  Member: 1,
+  Observer: 0,
+};
+
 /* ─── Helpers ─────────────────────────────────────────────── */
 
 /** Strip password_hash and return a safe user object */
-const safeUser = (row) => {
+const safeUser = (row, role = 'Member') => {
   const { password_hash, ...user } = row;
-  user.role = 'Decision Maker'; // Allow all registered users to test Resolve
+  user.role = role;
   return user;
 };
 
 /** Build and sign a 7-day JWT */
 const signToken = (userId) =>
   jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
+
+const getUserRole = async (userId) => {
+  const { rows } = await db.query(
+    `SELECT role
+     FROM workspace_members
+     WHERE user_id = $1
+     ORDER BY CASE role
+       WHEN 'Decision Maker' THEN 3
+       WHEN 'Reviewer' THEN 2
+       WHEN 'Member' THEN 1
+       ELSE 0
+     END DESC
+     LIMIT 1`,
+    [userId]
+  );
+
+  return rows[0]?.role || 'Member';
+};
 
 /* ─── POST /api/auth/register ─────────────────────────────── */
 router.post('/register', async (req, res) => {
@@ -55,7 +81,10 @@ router.post('/register', async (req, res) => {
       [username.trim(), email.trim().toLowerCase(), passwordHash]
     );
 
-    const user  = safeUser(result.rows[0]);
+    await ensureDefaultWorkspaceForUser(result.rows[0].id);
+
+    const role  = await getUserRole(result.rows[0].id);
+    const user  = safeUser(result.rows[0], role);
     const token = signToken(user.id);
 
     return res.status(201).json({ user, token });
@@ -94,8 +123,12 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    await ensureDefaultWorkspaceForUser(user.id);
+
+    const role = await getUserRole(user.id);
     const token = signToken(user.id);
-    return res.json({ user: safeUser(user), token });
+
+    return res.json({ user: safeUser(user, role), token });
   } catch (err) {
     console.error('Login error:', err);
     return res.status(500).json({ error: 'Server error — please try again' });
@@ -104,10 +137,6 @@ router.post('/login', async (req, res) => {
 
 /* ─── GET /api/auth/me  (protected) ──────────────────────── */
 router.get('/me', authMiddleware, async (req, res) => {
-  if (req.user.isDemo) {
-    return res.json({ user: { id: 1, username: 'Demo User', name: 'Demo User', email: 'demo@example.com', role: 'Decision Maker' } });
-  }
-
   try {
     const result = await db.query(
       'SELECT id, username, email, avatar_url, created_at FROM users WHERE id = $1',
@@ -117,7 +146,9 @@ router.get('/me', authMiddleware, async (req, res) => {
     if (result.rows.length === 0)
       return res.status(404).json({ error: 'User not found' });
 
-    return res.json({ user: result.rows[0] });
+    await ensureDefaultWorkspaceForUser(req.user.userId);
+    const role = await getUserRole(req.user.userId);
+    return res.json({ user: safeUser(result.rows[0], role) });
   } catch (err) {
     console.error('/me error:', err);
     return res.status(500).json({ error: 'Server error' });

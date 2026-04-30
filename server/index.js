@@ -7,22 +7,43 @@ require('dotenv').config();
 const authRoutes      = require('./routes/auth');
 const { router: channelRoutes } = require('./routes/channels');
 const messagesRoutes  = require('./routes/messages');
+const workspaceRoutes = require('./routes/workspaces');
 const setupSocket     = require('./socket');
 
 const app = express();
 const server = http.createServer(app);
+
+const codespaceName = process.env.CODESPACE_NAME;
+const codespaceDomain = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
+const codespaceOrigins = [];
+
+if (codespaceName && codespaceDomain) {
+  codespaceOrigins.push(`https://${codespaceName}-5173.${codespaceDomain}`);
+  codespaceOrigins.push(`https://${codespaceName}-5174.${codespaceDomain}`);
+}
 
 // Build allowed origins list — always include both 5173 and 5174 as fallbacks
 const allowedOrigins = [
   process.env.CLIENT_URL,
   'http://localhost:5173',
   'http://localhost:5174',
+  ...codespaceOrigins,
 ].filter(Boolean);
+
+const isCodespaceOrigin = (origin) => {
+  if (!origin || !codespaceDomain) return false;
+  try {
+    const { hostname } = new URL(origin);
+    return hostname.endsWith(`.${codespaceDomain}`);
+  } catch (err) {
+    return false;
+  }
+};
 
 const corsOptions = {
   origin: (origin, callback) => {
     // Allow requests with no origin (Postman, curl, same-origin) or matching origins
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.includes(origin) || isCodespaceOrigin(origin)) {
       callback(null, true);
     } else {
       console.warn(`CORS blocked origin: ${origin}`);
@@ -47,6 +68,7 @@ app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/workspaces', workspaceRoutes);
 app.use('/api/channels', channelRoutes);
 app.use('/api/messages', messagesRoutes);
 

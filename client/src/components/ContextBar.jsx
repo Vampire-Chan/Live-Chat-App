@@ -2,11 +2,7 @@ import React from 'react';
 import { Target, HelpCircle, CheckCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const ContextBar = ({ decisions = [], openQuestions = 3 }) => {
-  const defaultDecisions = decisions.length > 0 ? decisions : [
-    'Migrate to PostgreSQL by Q3',
-    'Use Inter for UI typography',
-  ];
+const ContextBar = ({ decisions = [], openQuestions = 0 }) => {
 
   return (
     <motion.div
@@ -62,9 +58,14 @@ const ContextBar = ({ decisions = [], openQuestions = 3 }) => {
         </div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-          {defaultDecisions.map((decision, i) => (
+          {decisions.length === 0 && (
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+              No decisions captured yet.
+            </div>
+          )}
+          {decisions.map((decision, i) => (
             <motion.div
-              key={i}
+              key={`${decision}-${i}`}
               whileHover={{ scale: 1.03 }}
               style={{
                 display: 'flex',

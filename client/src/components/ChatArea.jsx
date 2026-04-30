@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ContextBar from './ContextBar';
 import MessageBubble from './MessageBubble';
 import ThreadPanel from './ThreadPanel';
-import api, { getStoredUser } from '../api';
+import api, { getStoredUser, getApiBaseUrl } from '../api';
 
 /* ─── Toast System ─── */
 let toastId = 0;
@@ -112,11 +112,11 @@ const TAG_COLORS = {
   Idea:     { active: '#f472b6', activeBg: 'rgba(244,114,182,0.2)' },
 };
 const FILTERS = ['All', 'Updates', 'Questions', 'Decisions', 'Ideas'];
-const CHANNEL_NAMES = { '1': 'general', '2': 'engineering', '3': 'design', '4': 'decisions' };
 
 /* ─── Main ChatArea ─── */
-const ChatArea = ({ channelId = '1' }) => {
+const ChatArea = ({ channelId = '1', channels = [], currentUser }) => {
   const socketRef      = useRef(null);
+  const normalizedChannelId = channelId ? String(channelId) : null;
   const [messages, setMessages]       = useState([]);
   const [filter, setFilter]           = useState('All');
   const [tag, setTag]                 = useState('Update');
@@ -138,7 +138,7 @@ const ChatArea = ({ channelId = '1' }) => {
   const oldestIdRef    = useRef(null);  // cursor for infinite scroll
   const { toasts, addToast, removeToast } = useToasts();
 
-  const getUser = () => getStoredUser() || { id: 1, username: 'Demo User', name: 'Demo User' };
+  const getUser = () => currentUser || getStoredUser() || { id: 0, username: 'Unknown', name: 'Unknown' };
 
   /* ── Load history via REST ── */
   const loadHistory = useCallback(async (chId, beforeId = null) => {
@@ -163,13 +163,20 @@ const ChatArea = ({ channelId = '1' }) => {
         // Scroll to bottom after initial load
         setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }), 80);
       } else {
+        const el = listRef.current;
+        const previousScrollHeight = el?.scrollHeight || 0;
+        const previousScrollTop = el?.scrollTop || 0;
+
         // Prepend older messages, preserve scroll position
         setMessages(prev => [...incoming, ...prev]);
-        // Restore scroll so user stays at same visual position
-        setTimeout(() => {
-          const el = listRef.current;
-          if (el) el.scrollTop = el.scrollTop + 200; // approximate offset
-        }, 0);
+
+        // Using requestAnimationFrame to ensure the DOM has updated with new messages
+        requestAnimationFrame(() => {
+          if (el) {
+            const heightDiff = el.scrollHeight - previousScrollHeight;
+            el.scrollTop = previousScrollTop + heightDiff;
+          }
+        });
       }
     } catch (err) {
       console.warn('History load failed, using socket fallback');
@@ -187,15 +194,15 @@ const ChatArea = ({ channelId = '1' }) => {
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && hasMore && !loadingMore && oldestIdRef.current) {
-          loadHistory(channelId, oldestIdRef.current);
+        if (entry.isIntersecting && hasMore && !loadingMore && oldestIdRef.current && normalizedChannelId) {
+              loadHistory(normalizedChannelId, oldestIdRef.current);
         }
       },
       { root: listRef.current, threshold: 0.1 }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [channelId, hasMore, loadingMore, loadHistory]);
+  }, [normalizedChannelId, hasMore, loadingMore, loadHistory]);
 
   /* ── Thread Handling ── */
   const handleOpenThread = async (msg) => {
@@ -217,10 +224,10 @@ const ChatArea = ({ channelId = '1' }) => {
 
   const handleSendReply = (content) => {
     const sock = socketRef.current;
-    if (sock && isConnected && activeThread) {
+    if (sock && isConnected && activeThread && normalizedChannelId) {
       const user = getUser();
       sock.emit('send_message', {
-        channelId: Number(channelId),
+        channelId: Number(normalizedChannelId),
         userId: user.id || 1,
         content,
         tag: null, // replies typically untagged or use parent tag? Let's use null
@@ -234,20 +241,22 @@ const ChatArea = ({ channelId = '1' }) => {
 
   /* ── Socket connection — re-runs when channelId changes ── */
   useEffect(() => {
+    if (!normalizedChannelId) return;
+
     setMessages([]);
     oldestIdRef.current = null;
     setHasMore(false);
 
     // Load REST history immediately
-    loadHistory(channelId);
+    loadHistory(normalizedChannelId);
 
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-    const newSocket = io(API_URL, { reconnectionDelay: 1000, reconnectionAttempts: 5 });
+    const apiBaseUrl = getApiBaseUrl();
+    const newSocket = io(apiBaseUrl, { reconnectionDelay: 1000, reconnectionAttempts: 5 });
     socketRef.current = newSocket;
 
     newSocket.on('connect', () => {
       setIsConnected(true);
-      newSocket.emit('join_channel', { channelId: Number(channelId) });
+      newSocket.emit('join_channel', { channelId: Number(normalizedChannelId) });
       addToast('Connected to Kōru', 'success', 2500);
     });
 
@@ -311,24 +320,26 @@ const ChatArea = ({ channelId = '1' }) => {
       newSocket.disconnect();
       socketRef.current = null;
     };
-  }, [channelId]);
+  }, [normalizedChannelId]);
 
   /* ── Typing helpers ── */
   const emitTypingStop = useCallback(() => {
     const sock = socketRef.current;
     if (!sock || !isTypingRef.current) return;
     const user = getUser();
-    sock.emit('typing_stop', { channelId: Number(channelId), userId: user.id, username: user.username || user.name });
+    if (!normalizedChannelId) return;
+    sock.emit('typing_stop', { channelId: Number(normalizedChannelId), userId: user.id, username: user.username || user.name });
     isTypingRef.current = false;
-  }, [channelId]);
+  }, [normalizedChannelId]);
 
   const handleInputKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(e); return; }
     const sock = socketRef.current;
     if (!sock) return;
     const user = getUser();
+    if (!normalizedChannelId) return;
     if (!isTypingRef.current) {
-      sock.emit('typing_start', { channelId: Number(channelId), userId: user.id, username: user.username || user.name });
+      sock.emit('typing_start', { channelId: Number(normalizedChannelId), userId: user.id, username: user.username || user.name });
       isTypingRef.current = true;
     }
     clearTimeout(typingTimerRef.current);
@@ -338,13 +349,13 @@ const ChatArea = ({ channelId = '1' }) => {
   /* ── Send message ── */
   const handleSend = (e) => {
     if (e?.preventDefault) e.preventDefault();
-    if (!inputText.trim()) return;
+    if (!inputText.trim() || !normalizedChannelId) return;
     const user = getUser();
     const sock = socketRef.current;
 
     if (sock && isConnected) {
       sock.emit('send_message', {
-        channelId: Number(channelId),
+        channelId: Number(normalizedChannelId),
         userId: user.id || 1,
         content: inputText.trim(),
         tag,
@@ -402,9 +413,16 @@ const ChatArea = ({ channelId = '1' }) => {
   });
   const items = withDividers(filtered);
 
-  const channelName = CHANNEL_NAMES[channelId] || 'general';
-  
+  const activeChannel = channels.find(ch => String(ch.id) === String(normalizedChannelId));
+  const channelName = activeChannel?.name || 'general';
+  const channelDescription = activeChannel?.description
+    || (channelName === 'general' ? 'Team-wide announcements and discussion' : `#${channelName} channel`);
+
   const openQuestionsCount = messages.filter(m => m.tag === 'Question' && !m.resolved).length;
+  const recentDecisions = messages
+    .filter(m => m.tag === 'Decision' && (m.resolved || m.resolution_summary))
+    .slice(-2)
+    .map(m => m.resolution_summary || m.content);
 
   return (
     <div style={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}>
@@ -420,7 +438,7 @@ const ChatArea = ({ channelId = '1' }) => {
         <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{channelName}</h2>
         <span style={{ height: '16px', width: '1px', background: 'var(--border-subtle)', margin: '0 4px' }} />
         <span style={{ fontSize: '13px', color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {channelName === 'general' ? 'Team-wide announcements and discussion' : `#${channelName} channel`}
+          {channelDescription}
         </span>
         {!isConnected && (
           <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: '#fbbf24', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.2)', padding: '3px 10px', borderRadius: '999px' }}>
@@ -436,7 +454,7 @@ const ChatArea = ({ channelId = '1' }) => {
       </div>
 
         {/* Context Bar */}
-        <ContextBar openQuestions={openQuestionsCount} />
+        <ContextBar decisions={recentDecisions} openQuestions={openQuestionsCount} />
 
         {/* Filter tabs */}
       <div style={{ padding: '10px 16px', display: 'flex', gap: '6px', overflowX: 'auto', flexShrink: 0, borderBottom: '1px solid var(--border-subtle)' }} className="scrollbar-hide">
@@ -466,7 +484,7 @@ const ChatArea = ({ channelId = '1' }) => {
 
         {/* Load more button fallback */}
         {hasMore && !loadingMore && (
-          <button onClick={() => loadHistory(channelId, oldestIdRef.current)}
+          <button onClick={() => loadHistory(normalizedChannelId, oldestIdRef.current)}
             style={{ alignSelf: 'center', margin: '8px 0', display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(129,140,248,0.08)', border: '1px solid rgba(129,140,248,0.2)', color: 'var(--accent)', borderRadius: '999px', padding: '5px 14px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>
             <ChevronUp style={{ width: '13px', height: '13px' }} /> Load older messages
           </button>

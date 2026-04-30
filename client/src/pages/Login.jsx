@@ -184,15 +184,6 @@ const Login = ({ onLoginSuccess }) => {
       onLoginSuccess(data.user);
       navigate('/app');
     } catch (err) {
-      /* Demo bypass — works even when DB is offline */
-      if (isLoginMode && formData.email.trim() === 'demo@example.com') {
-        const demoUser = { id: 1, username: 'Demo User', name: 'Demo User', email: 'demo@example.com', role: 'Decision Maker' };
-        // Use a fake but structurally valid JWT payload for demo mode
-        saveAuth('demo_token', demoUser);
-        onLoginSuccess(demoUser);
-        navigate('/app');
-        return;
-      }
       const msg = err.response?.data?.error || '';
       setServerError(mapServerError(msg));
     } finally {
@@ -457,7 +448,7 @@ const Login = ({ onLoginSuccess }) => {
           </button>
         </div>
 
-        {/* ── Demo hint ── */}
+        {/* ── Help text ── */}
         <div
           style={{
             marginTop: '16px',
@@ -472,7 +463,7 @@ const Login = ({ onLoginSuccess }) => {
             lineHeight: 1.5,
           }}
         >
-          Try the demo: <span style={{ color: 'var(--accent)', fontWeight: 600 }}>demo@example.com</span> / any password
+          Use a real account to sign in, or create one with the register tab.
         </div>
       </motion.div>
     </div>

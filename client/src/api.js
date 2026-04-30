@@ -10,7 +10,29 @@ import axios from 'axios';
 export const TOKEN_KEY = 'koru_token';
 export const USER_KEY  = 'koru_user';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+const resolveApiUrl = () => {
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+
+  if (typeof window === 'undefined') return 'http://localhost:5001';
+
+  const { hostname, protocol } = window.location;
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'http://localhost:5001';
+  }
+
+  if (hostname.endsWith('.app.github.dev')) {
+    const forwardedHost = hostname.replace(/-(5173|5174)(\.|$)/, '-5001$2');
+    if (forwardedHost !== hostname) {
+      return `${protocol}//${forwardedHost}`;
+    }
+  }
+
+  return 'http://localhost:5001';
+};
+
+const API_URL = resolveApiUrl();
+
+export const getApiBaseUrl = () => API_URL;
 
 const api = axios.create({
   baseURL: API_URL,

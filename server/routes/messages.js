@@ -5,6 +5,26 @@ const { fetchMessages, fetchMessageById } = require('./channels');
 
 const router = express.Router();
 
+const canResolveMessage = async (userId, messageId) => {
+  const { rows } = await db.query(
+    `SELECT wm.role
+     FROM messages m
+     JOIN channels c ON c.id = m.channel_id
+     JOIN workspace_members wm ON wm.workspace_id = c.workspace_id
+     WHERE m.id = $1 AND wm.user_id = $2
+     ORDER BY CASE wm.role
+       WHEN 'Decision Maker' THEN 3
+       WHEN 'Reviewer' THEN 2
+       WHEN 'Member' THEN 1
+       ELSE 0
+     END DESC
+     LIMIT 1`,
+    [messageId, userId]
+  );
+
+  return ['Decision Maker', 'Reviewer'].includes(rows[0]?.role);
+};
+
 /* ─── GET /api/messages/:id/replies ──────────────────────── */
 router.get('/:id/replies', authMiddleware, async (req, res) => {
   const messageId = parseInt(req.params.id, 10);
@@ -42,6 +62,11 @@ router.patch('/:id/resolve', authMiddleware, async (req, res) => {
   }
 
   try {
+    const allowed = await canResolveMessage(req.user.userId || req.user.id, messageId);
+    if (!allowed) {
+      return res.status(403).json({ error: 'Insufficient permissions to resolve this message' });
+    }
+
     const result = await db.query(
       'UPDATE messages SET resolved = $1, resolution_summary = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING channel_id',
       [resolved, resolution_summary, messageId]
@@ -76,7 +101,7 @@ router.patch('/:id/resolve', authMiddleware, async (req, res) => {
 router.post('/:id/reactions', authMiddleware, async (req, res) => {
   const messageId = parseInt(req.params.id, 10);
   const { emoji } = req.body;
-  const userId = req.user.id; // from authMiddleware
+  const userId = req.user.userId || req.user.id; // normalized in auth middleware
 
   if (isNaN(messageId) || !emoji) {
     return res.status(400).json({ error: 'Invalid message ID or emoji' });

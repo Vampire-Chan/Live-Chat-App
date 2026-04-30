@@ -16,14 +16,9 @@ const authMiddleware = (req, res, next) => {
 
   const token = authHeader.slice(7); // strip "Bearer "
 
-  if (token === 'demo_token') {
-    req.user = { id: 1, userId: 1, isDemo: true };
-    return next();
-  }
-
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded; // { userId, iat, exp }
+    req.user = { ...decoded, id: decoded.userId }; // normalize id/userId for downstream handlers
     next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {
