@@ -110,13 +110,16 @@ const WorkspaceLayout = ({ currentUser, onLogout }) => {
   const handleCreateWorkspace = async (e) => {
     e.preventDefault();
     const name = e.target.wsName.value;
+    if (!name?.trim()) return;
+
     try {
       const { data } = await api.post('/api/workspaces', { name });
-      setWorkspaces(prev => [...prev, data.workspace]);
+      const newWs = data.workspace || data;
+      setWorkspaces(prev => [...prev, newWs]);
       setShowWorkspaceModal(false);
-      handleWorkspaceSelect(data.workspace);
+      handleWorkspaceSelect(newWs);
     } catch (err) {
-      alert('Failed to create workspace');
+      alert(`Failed to create workspace: ${err.response?.data?.error || err.message}`);
     }
   };
 
@@ -124,13 +127,17 @@ const WorkspaceLayout = ({ currentUser, onLogout }) => {
     e.preventDefault();
     const name = e.target.chName.value;
     const description = e.target.chDesc.value;
+
+    if (!activeWorkspace?.id) return alert('No active workspace selected');
+
     try {
       const { data } = await api.post(`/api/workspaces/${activeWorkspace.id}/channels`, { name, description });
-      setChannels(prev => [...prev, data.channel]);
+      const newChannel = data.channel || data;
+      setChannels(prev => [...prev, newChannel]);
       setShowChannelModal(false);
-      handleChannelSelect(data.channel);
+      handleChannelSelect(newChannel);
     } catch (err) {
-      alert('Failed to create channel');
+      alert(`Failed to create channel: ${err.response?.data?.error || err.message}`);
     }
   };
 
@@ -145,7 +152,7 @@ const WorkspaceLayout = ({ currentUser, onLogout }) => {
         handleChannelSelect(channels[0]);
       }
     } catch (err) {
-      alert('Failed to delete channel');
+      alert(`Failed to delete channel: ${err.response?.data?.error || err.message}`);
     }
   };
 
