@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ContextBar from './ContextBar';
 import MessageBubble from './MessageBubble';
 import ThreadPanel from './ThreadPanel';
-import api, { getStoredUser, getApiBaseUrl } from '../api';
+import api, { getStoredUser, getApiBaseUrl, getSocketUrl } from '../api';
 
 /* ─── Toast System ─── */
 let toastId = 0;
