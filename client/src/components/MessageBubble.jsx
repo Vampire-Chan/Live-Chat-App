@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { CheckCircle2, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import LinkEmbed from './LinkEmbed';
 
 const TAG_CONFIG = {
   Update:   { bg: 'rgba(99,102,241,0.15)',  text: '#818cf8', label: 'UPDATE' },
@@ -10,6 +11,8 @@ const TAG_CONFIG = {
 };
 
 const EMOJI_LIST = ['👍', '❤️', '😂', '🎉', '🔥', '👀', '✅', '❌', '🤔', '💡', '🙌', '😮'];
+
+const URL_REGEX = /(https?:\/\/[^\s]+)/g;
 
 const MessageBubble = ({ message, onReact, onResolve, onOpenThread, currentUser, onUserClick, isThreadView = false }) => {
   const { user, content, created_at, tag, resolved, resolution_summary, reactions, reply_count } = message;
@@ -47,6 +50,9 @@ const MessageBubble = ({ message, onReact, onResolve, onOpenThread, currentUser,
       });
     }
   };
+
+  // Find all URLs in content to render embeds
+  const links = content.match(URL_REGEX) || [];
 
   return (
     <motion.div
@@ -184,8 +190,18 @@ const MessageBubble = ({ message, onReact, onResolve, onOpenThread, currentUser,
             whiteSpace: 'pre-wrap',
           }}
         >
-          {content}
+          {content.split(URL_REGEX).map((part, i) => {
+            if (part.match(URL_REGEX)) {
+              return <a key={i} href={part} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>{part}</a>;
+            }
+            return part;
+          })}
         </p>
+
+        {/* Embeds */}
+        {links.map((link, i) => (
+          <LinkEmbed key={i} url={link} />
+        ))}
 
         {/* Reactions */}
         {reactions && reactions.length > 0 && (
