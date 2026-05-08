@@ -11,7 +11,7 @@ const TAG_CONFIG = {
 
 const EMOJI_LIST = ['👍', '❤️', '😂', '🎉', '🔥', '👀', '✅', '❌', '🤔', '💡', '🙌', '😮'];
 
-const MessageBubble = ({ message, onReact, onResolve, onOpenThread, currentUser, isThreadView = false }) => {
+const MessageBubble = ({ message, onReact, onResolve, onOpenThread, currentUser, onUserClick, isThreadView = false }) => {
   const { user, content, created_at, tag, resolved, resolution_summary, reactions, reply_count } = message;
   const [showResolveInput, setShowResolveInput] = useState(false);
   const [resolveSummary, setResolveSummary] = useState('');
@@ -26,7 +26,7 @@ const MessageBubble = ({ message, onReact, onResolve, onOpenThread, currentUser,
 
   // Avatar color based on username first char
   const COLORS = ['#818cf8', '#f472b6', '#34d399', '#fbbf24', '#60a5fa', '#a78bfa'];
-  const avatarColor = COLORS[(user?.name || 'U').charCodeAt(0) % COLORS.length];
+  const avatarColor = COLORS[(user?.name || user?.username || 'U').charCodeAt(0) % COLORS.length];
 
   const handleResolveSubmit = (e) => {
     e.preventDefault();
@@ -34,6 +34,17 @@ const MessageBubble = ({ message, onReact, onResolve, onOpenThread, currentUser,
       onResolve(message.id, resolveSummary.trim());
       setShowResolveInput(false);
       setResolveSummary('');
+    }
+  };
+
+  const handleUserClick = () => {
+    if (onUserClick) {
+      onUserClick({
+        id: user.id,
+        username: user.username || user.name,
+        avatar_url: user.avatar_url,
+        role: user.role || 'Member'
+      });
     }
   };
 
@@ -61,12 +72,13 @@ const MessageBubble = ({ message, onReact, onResolve, onOpenThread, currentUser,
     >
       {/* Avatar */}
       <div
+        onClick={handleUserClick}
         style={{
           width: '36px',
           height: '36px',
           borderRadius: '8px',
-          background: `${avatarColor}22`,
-          border: `1px solid ${avatarColor}44`,
+          background: user?.avatar_url ? 'transparent' : `${avatarColor}22`,
+          border: user?.avatar_url ? 'none' : `1px solid ${avatarColor}44`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -75,9 +87,15 @@ const MessageBubble = ({ message, onReact, onResolve, onOpenThread, currentUser,
           color: avatarColor,
           flexShrink: 0,
           marginTop: '1px',
+          cursor: 'pointer',
+          overflow: 'hidden'
         }}
       >
-        {(user?.name || 'U').charAt(0).toUpperCase()}
+        {user?.avatar_url ? (
+          <img src={user.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
+        ) : (
+          (user?.name || user?.username || 'U').charAt(0).toUpperCase()
+        )}
       </div>
 
       {/* Content */}
@@ -86,14 +104,16 @@ const MessageBubble = ({ message, onReact, onResolve, onOpenThread, currentUser,
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
           {/* Username */}
           <span
+            onClick={handleUserClick}
             style={{
               fontSize: '13px',
               fontWeight: 600,
               color: 'var(--accent)',
               lineHeight: 1,
+              cursor: 'pointer'
             }}
           >
-            {user?.name || 'Unknown'}
+            {user?.name || user?.username || 'Unknown'}
           </span>
 
           {/* Timestamp */}

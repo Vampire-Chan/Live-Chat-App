@@ -169,4 +169,41 @@ router.get('/me', authMiddleware, async (req, res) => {
   }
 });
 
+/* ─── PATCH /api/auth/profile (protected) ────────────────── */
+router.patch('/profile', authMiddleware, async (req, res) => {
+  const { username, avatar_url } = req.body;
+  
+  try {
+    const fields = [];
+    const values = [];
+    let idx = 1;
+
+    if (username?.trim()) {
+      fields.push(`username = $${idx++}`);
+      values.push(username.trim());
+    }
+    if (avatar_url !== undefined) {
+      fields.push(`avatar_url = $${idx++}`);
+      values.push(avatar_url);
+    }
+
+    if (fields.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    values.push(req.user.userId);
+    const result = await db.query(
+      `UPDATE users SET ${fields.join(', ')} WHERE id = $${idx} RETURNING id, username, email, avatar_url, created_at`,
+      values
+    );
+
+    const role = await getUserRole(req.user.userId);
+    return res.json({ user: safeUser(result.rows[0], role) });
+  } catch (err) {
+    console.error('Update profile error:', err);
+    if (err.code === '23505') return res.status(409).json({ error: 'Username already taken' });
+    return res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
 module.exports = router;
