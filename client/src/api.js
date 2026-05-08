@@ -14,16 +14,15 @@ const resolveApiUrl = () => {
   let url = import.meta.env.VITE_API_URL;
   
   if (url) {
-    // Strip trailing slash and trailing /api to prevent double /api/api
-    url = url.replace(/\/$/, '').replace(/\/api$/, '');
-    return `${url}/api`;
+    // Strip trailing slash and trailing /api to keep the root URL as base
+    return url.replace(/\/$/, '').replace(/\/api$/, '');
   }
 
-  if (typeof window === 'undefined') return 'http://localhost:5000/api';
+  if (typeof window === 'undefined') return 'http://localhost:5000';
 
   const { hostname, protocol } = window.location;
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'http://localhost:5001';
+    return 'http://localhost:5000';
   }
 
   if (hostname.endsWith('.app.github.dev')) {
