@@ -34,6 +34,11 @@ const API_URL = resolveApiUrl();
 
 export const getApiBaseUrl = () => API_URL;
 
+export const getSocketUrl = () => {
+  if (import.meta.env.VITE_SOCKET_URL) return import.meta.env.VITE_SOCKET_URL;
+  return API_URL.replace(/\/api$/, '');
+};
+
 const api = axios.create({
   baseURL: API_URL,
   timeout: 10_000,

@@ -250,8 +250,8 @@ const ChatArea = ({ channelId = '1', channels = [], currentUser }) => {
     // Load REST history immediately
     loadHistory(normalizedChannelId);
 
-    const apiBaseUrl = getApiBaseUrl();
-    const newSocket = io(apiBaseUrl, { reconnectionDelay: 1000, reconnectionAttempts: 5 });
+    const socketUrl = getSocketUrl();
+    const newSocket = io(socketUrl, { reconnectionDelay: 1000, reconnectionAttempts: 5 });
     socketRef.current = newSocket;
 
     newSocket.on('connect', () => {
