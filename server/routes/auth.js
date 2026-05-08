@@ -93,7 +93,13 @@ router.post('/register', async (req, res) => {
     // pg unique violation fallback
     if (err.code === '23505')
       return res.status(409).json({ error: 'Username or email already exists' });
-    return res.status(500).json({ error: 'Server error — please try again' });
+    
+    // DEBUG: Return actual error message to help identify the 500 cause
+    return res.status(500).json({ 
+      error: 'Server error', 
+      details: err.message,
+      code: err.code
+    });
   }
 });
 
@@ -131,7 +137,11 @@ router.post('/login', async (req, res) => {
     return res.json({ user: safeUser(user, role), token });
   } catch (err) {
     console.error('Login error:', err);
-    return res.status(500).json({ error: 'Server error — please try again' });
+    return res.status(500).json({ 
+      error: 'Server error', 
+      details: err.message,
+      code: err.code 
+    });
   }
 });
 
@@ -151,7 +161,11 @@ router.get('/me', authMiddleware, async (req, res) => {
     return res.json({ user: safeUser(result.rows[0], role) });
   } catch (err) {
     console.error('/me error:', err);
-    return res.status(500).json({ error: 'Server error' });
+    return res.status(500).json({ 
+      error: 'Server error', 
+      details: err.message,
+      code: err.code 
+    });
   }
 });
 
