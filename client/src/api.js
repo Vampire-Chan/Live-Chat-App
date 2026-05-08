@@ -11,9 +11,15 @@ export const TOKEN_KEY = 'koru_token';
 export const USER_KEY  = 'koru_user';
 
 const resolveApiUrl = () => {
-  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  let url = import.meta.env.VITE_API_URL;
+  
+  if (url) {
+    // Strip trailing slash and trailing /api to prevent double /api/api
+    url = url.replace(/\/$/, '').replace(/\/api$/, '');
+    return `${url}/api`;
+  }
 
-  if (typeof window === 'undefined') return 'http://localhost:5001';
+  if (typeof window === 'undefined') return 'http://localhost:5000/api';
 
   const { hostname, protocol } = window.location;
   if (hostname === 'localhost' || hostname === '127.0.0.1') {

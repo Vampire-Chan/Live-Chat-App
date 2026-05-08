@@ -22,28 +22,19 @@ if (codespaceName && codespaceDomain) {
   codespaceOrigins.push(`https://${codespaceName}-5174.${codespaceDomain}`);
 }
 
-// Build allowed origins list — always include both 5173 and 5174 as fallbacks
+// Build allowed origins list
 const allowedOrigins = [
   process.env.CLIENT_URL,
+  'https://live-chat-app-plum-gamma.vercel.app', // Explicitly add your Vercel URL
   'http://localhost:5173',
   'http://localhost:5174',
   ...codespaceOrigins,
 ].filter(Boolean);
 
-const isCodespaceOrigin = (origin) => {
-  if (!origin || !codespaceDomain) return false;
-  try {
-    const { hostname } = new URL(origin);
-    return hostname.endsWith(`.${codespaceDomain}`);
-  } catch (err) {
-    return false;
-  }
-};
-
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (Postman, curl, same-origin) or matching origins
-    if (!origin || allowedOrigins.includes(origin) || isCodespaceOrigin(origin)) {
+    // In production/college project mode, let's be more permissive if origin matches vercel or is null
+    if (!origin || allowedOrigins.includes(origin) || origin.includes('vercel.app')) {
       callback(null, true);
     } else {
       console.warn(`CORS blocked origin: ${origin}`);
