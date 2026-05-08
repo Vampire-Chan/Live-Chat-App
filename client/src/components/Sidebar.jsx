@@ -293,21 +293,25 @@ const Sidebar = ({
 
       {/* User footer */}
       <div
+        onClick={onProfileClick}
         style={{
           padding: '12px 16px',
           borderTop: '1px solid var(--border-subtle)',
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
+          cursor: 'pointer',
+          transition: 'background 0.2s',
         }}
+        className="hover:bg-white/[0.03]"
       >
         <div
           style={{
             width: '32px',
             height: '32px',
             borderRadius: '8px',
-            background: `${getAvatarColor(currentUser.username || 'Y')}22`,
-            border: `1px solid ${getAvatarColor(currentUser.username || 'Y')}44`,
+            background: currentUser.avatar_url ? 'transparent' : `${getAvatarColor(currentUser.username || 'Y')}22`,
+            border: currentUser.avatar_url ? 'none' : `1px solid ${getAvatarColor(currentUser.username || 'Y')}44`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -315,9 +319,14 @@ const Sidebar = ({
             fontWeight: 700,
             color: getAvatarColor(currentUser.username || 'Y'),
             flexShrink: 0,
+            overflow: 'hidden'
           }}
         >
-          {(currentUser.username || 'Y').charAt(0).toUpperCase()}
+          {currentUser.avatar_url ? (
+            <img src={currentUser.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
+          ) : (
+            (currentUser.username || 'Y').charAt(0).toUpperCase()
+          )}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2 }}>
@@ -332,7 +341,7 @@ const Sidebar = ({
           id="logout-btn"
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
-          onClick={handleLogout}
+          onClick={(e) => { e.stopPropagation(); handleLogout(); }}
           style={{
             background: 'none',
             border: 'none',
