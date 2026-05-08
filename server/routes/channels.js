@@ -69,6 +69,20 @@ const fetchMessages = async (channelId, limit = 50, beforeId = null, parentId = 
   return rows.reverse();
 };
 
+/* ─── DELETE /api/channels/:channelId ────────────────────── */
+router.delete('/:channelId', authMiddleware, async (req, res) => {
+  const channelId = parseInt(req.params.channelId, 10);
+  if (isNaN(channelId)) return res.status(400).json({ error: 'Invalid ID' });
+
+  try {
+    await db.query('DELETE FROM channels WHERE id = $1', [channelId]);
+    return res.status(204).send();
+  } catch (err) {
+    console.error('Delete channel error:', err);
+    return res.status(500).json({ error: 'Failed to delete' });
+  }
+});
+
 const fetchMessageById = async (id) => {
   const { rows } = await db.query(
     `SELECT

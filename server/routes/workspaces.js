@@ -1,4 +1,5 @@
 const express = require('express');
+const db = require('../db');
 const authMiddleware = require('../middleware/auth');
 const {
   ensureDefaultWorkspaceForUser,
@@ -20,6 +21,36 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
+router.post('/', authMiddleware, async (req, res) => {
+  const { name } = req.body;
+  if (!name?.trim()) return res.status(400).json({ error: 'Name is required' });
+
+  try {
+    const slugBase = name.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const { rows } = await db.query(
+      'INSERT INTO workspaces (name, slug) VALUES ($1, $2) RETURNING id, name, slug',
+      [name.trim(), `${slugBase}-${Date.now().toString().slice(-4)}`]
+    );
+
+    const workspace = rows[0];
+    await db.query(
+      'INSERT INTO workspace_members (user_id, workspace_id, role) VALUES ($1, $2, $3)',
+      [req.user.userId, workspace.id, 'Decision Maker']
+    );
+
+    // Create default #general channel
+    const chanInsert = await db.query(
+      'INSERT INTO channels (workspace_id, name, description) VALUES ($1, $2, $3) RETURNING id, name, description',
+      [workspace.id, 'general', 'General discussion']
+    );
+
+    return res.status(201).json({ ...workspace, channels: [chanInsert.rows[0]] });
+  } catch (err) {
+    console.error('Create workspace error:', err);
+    return res.status(500).json({ error: 'Failed to create workspace' });
+  }
+});
+
 router.get('/:workspaceId/channels', authMiddleware, async (req, res) => {
   const workspaceId = parseInt(req.params.workspaceId, 10);
   if (isNaN(workspaceId)) {
@@ -35,6 +66,26 @@ router.get('/:workspaceId/channels', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('Fetch channels error:', err);
     return res.status(500).json({ error: 'Failed to load channels' });
+  }
+});
+
+router.post('/:workspaceId/channels', authMiddleware, async (req, res) => {
+  const workspaceId = parseInt(req.params.workspaceId, 10);
+  const { name, description } = req.body;
+
+  if (isNaN(workspaceId) || !name?.trim()) {
+    return res.status(400).json({ error: 'Invalid data' });
+  }
+
+  try {
+    const { rows } = await db.query(
+      'INSERT INTO channels (workspace_id, name, description) VALUES ($1, $2, $3) RETURNING id, name, description',
+      [workspaceId, name.trim().toLowerCase().replace(/\s+/g, '-'), description]
+    );
+    return res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('Create channel error:', err);
+    return res.status(500).json({ error: 'Failed to create channel' });
   }
 });
 
